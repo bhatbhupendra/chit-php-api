@@ -53,7 +53,7 @@ try {
     $stmt->execute([$member['id']]);
     $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 3. For each group, get open round and calculate eligibility
+    // 3. For each group, get open round, all bids, and eligibility
     foreach ($groups as &$group) {
         $groupId = (int) $group['group_id'];
         $groupMemberId = (int) $group['group_member_id'];
@@ -63,6 +63,7 @@ try {
         $group['already_paid'] = false;
         $group['already_bid'] = false;
         $group['not_eligible_reason'] = '';
+        $group['bids'] = [];
 
         // Find current open round
         $stmt = $db->prepare("
@@ -86,17 +87,42 @@ try {
             continue;
         }
 
+        $roundId = (int) $openRound['round_id'];
+        $roundNo = (int) $openRound['round_no'];
+
         $group['open_round'] = [
-            'id' => (int) $openRound['round_id'],
-            'round_id' => (int) $openRound['round_id'],
+            'id' => $roundId,
+            'round_id' => $roundId,
             'group_id' => (int) $openRound['group_id'],
-            'round_no' => (int) $openRound['round_no'],
+            'round_no' => $roundNo,
             'status' => $openRound['status'],
             'max_bid_amount' => (float) $openRound['max_bid_amount'],
         ];
 
-        $roundId = (int) $openRound['round_id'];
-        $roundNo = (int) $openRound['round_no'];
+        // Get all bids of this open round
+        // NOTE: bids table does not have group_id, so group_id comes from group_members table
+        $stmt = $db->prepare("
+            SELECT 
+                b.id AS bid_id,
+                b.round_id,
+                b.group_member_id,
+                b.bid_amount,
+                b.bid_by,
+                b.created_at,
+                b.updated_at,
+
+                m.id AS member_id,
+                m.full_name,
+                m.member_code
+            FROM bids b
+            INNER JOIN group_members gm ON gm.id = b.group_member_id
+            INNER JOIN members m ON m.id = gm.member_id
+            WHERE gm.group_id = ?
+            AND b.round_id = ?
+            ORDER BY b.created_at ASC
+        ");
+        $stmt->execute([$groupId, $roundId]);
+        $group['bids'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Round 1 is owner/admin payout round, no bidding
         if ($roundNo === 1) {
@@ -105,7 +131,6 @@ try {
         }
 
         // Check if this group member already received payout
-        // IMPORTANT: winner_group_member_id should match group_members.id
         $stmt = $db->prepare("
             SELECT COUNT(*)
             FROM payouts
@@ -128,18 +153,10 @@ try {
             WHERE round_id = ?
             AND group_member_id = ?
         ");
-        $stmt->execute([
-            $roundId,
-            $groupMemberId
-        ]);
+        $stmt->execute([$roundId, $groupMemberId]);
         $alreadyBid = ((int) $stmt->fetchColumn()) > 0;
 
         $group['already_bid'] = $alreadyBid;
-
-        if ($alreadyBid) {
-            $group['not_eligible_reason'] = 'Member already placed a bid in this round.';
-            continue;
-        }
 
         // If all checks passed, member is eligible
         $group['eligible'] = true;

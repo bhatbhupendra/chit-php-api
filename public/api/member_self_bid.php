@@ -100,34 +100,32 @@ try {
     if ((int) $stmt->fetchColumn() > 0) {
         api_error('You already received payout, so you cannot bid again.');
     }
-
-    // 7. Check if member already bid in this open round
+    // 6.1 Check if bid amount is lower than current lowest bid in this round
     $stmt = $db->prepare("
-        SELECT COUNT(*)
+        SELECT MIN(bid_amount) AS lowest_bid
         FROM bids
-        WHERE round_id = ?
-        AND group_member_id = ?
+        WHERE id = ?
+        AND round_id = ?
     ");
-    $stmt->execute([
-        $roundId,
-        $groupMemberId
-    ]);
+    $stmt->execute([$groupId, $roundId]);
+    $lowestBid = $stmt->fetch(PDO::FETCH_ASSOC)['lowest_bid'] ?? null;
 
-    if ((int) $stmt->fetchColumn() > 0) {
-        api_error('You have already placed a bid in this round.');
+    if ($lowestBid !== null && $bidAmount >= (float)$lowestBid) {
+        api_error('Bid amount must be lower than the current lowest bid: ' . $lowestBid);
     }
 
-    // 8. Insert bid
+    // 7. Always insert new bid to maintain bid history
     $stmt = $db->prepare("
         INSERT INTO bids
         (
             round_id,
             group_member_id,
             bid_amount,
+            bid_by,
             created_at,
             updated_at
         )
-        VALUES (?, ?, ?, NOW(), NOW())
+        VALUES (?, ?, ?, 'MEMBER', NOW(), NOW())
     ");
 
     $stmt->execute([
@@ -141,7 +139,7 @@ try {
         'round_no' => $roundNo,
         'bid_amount' => $bidAmount,
         'max_bid_amount' => $maxBidAmount,
-    ], 'Bid placed successfully');
+    ], 'Bid placed successfully.');
 
 } catch (Throwable $e) {
     api_error($e->getMessage(), [], 500);

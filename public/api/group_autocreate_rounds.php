@@ -79,7 +79,7 @@ try {
         $stmtMembers->execute([$groupId]);
         $groupMembers = $stmtMembers->fetchAll(PDO::FETCH_ASSOC);
 
-        foreach ($groupMembers as $gm) {
+        foreach ($groupMembers as $gm) {    
             $stmtContribution = $db->prepare("
                 INSERT INTO contributions
                 (round_id, group_member_id, amount, status, created_at, updated_at)

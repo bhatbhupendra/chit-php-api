@@ -24,6 +24,7 @@ try {
     $stmt = $db->prepare("
         SELECT 
             gm.id AS group_member_id,
+            gm.is_admin,
             m.id,
             m.full_name,
             m.phone,

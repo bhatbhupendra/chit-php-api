@@ -3,11 +3,12 @@
 require_once __DIR__ . '/_bootstrap.php';
 
 try {
-    require_api_admin();
+    $admin = require_api_admin();
+    $adminId = is_array($admin) ? (int) $admin['id'] : (int) $admin;
 
     $db = db();
 
-    $stmt = $db->query("
+    $stmt = $db->prepare("
         SELECT 
             id,
             group_name,
@@ -19,8 +20,11 @@ try {
             start_date,
             status
         FROM chit_groups
+        WHERE created_by = ?
         ORDER BY id DESC
     ");
+
+    $stmt->execute([$adminId]);
 
     $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

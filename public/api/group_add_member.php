@@ -17,6 +17,8 @@ try {
     $email = trim($input['email'] ?? '');
     $address = trim($input['address'] ?? '');
     $memberCode = trim($input['member_code'] ?? '');
+    $isAdmin = intval($input['is_admin'] ?? 0);
+    $isAdmin = $isAdmin === 1 ? 1 : 0;
 
     if ($groupId <= 0) {
         api_error('Group ID is required', [], 422);
@@ -44,6 +46,22 @@ try {
 
     if ($currentMembers >= intval($group['member_count'])) {
         api_error('This group already has maximum members', [], 422);
+    }
+
+    // Only one admin member allowed per group
+    if ($isAdmin === 1) {
+        $stmt = $db->prepare("
+            SELECT COUNT(*) 
+            FROM group_members 
+            WHERE group_id = ? 
+            AND is_admin = 1
+        ");
+        $stmt->execute([$groupId]);
+        $adminExists = intval($stmt->fetchColumn());
+
+        if ($adminExists > 0) {
+            api_error('Admin member already exists for this group', [], 422);
+        }
     }
 
     // Auto generate member code if empty
@@ -79,21 +97,23 @@ try {
     // Connect member with group
     $stmt = $db->prepare("
         INSERT INTO group_members
-            (group_id, member_id, created_at, updated_at)
+            (group_id, member_id, is_admin, joined_at, status, created_at, updated_at)
         VALUES
-            (?, ?, NOW(), NOW())
+            (?, ?, ?, CURDATE(), 'active', NOW(), NOW())
     ");
 
     $stmt->execute([
         $groupId,
-        $memberId
+        $memberId,
+        $isAdmin
     ]);
 
     $db->commit();
 
     api_success([
         'member_id' => $memberId,
-        'member_code' => $memberCode
+        'member_code' => $memberCode,
+        'is_admin' => $isAdmin
     ], 'Member added successfully');
 
 } catch (Throwable $e) {

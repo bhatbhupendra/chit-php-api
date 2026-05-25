@@ -13,7 +13,6 @@ try {
     }
 
     $db = db();
-
     $db->beginTransaction();
 
     $stmt = $db->prepare("
@@ -47,6 +46,21 @@ try {
         $memberPayAmount = $fundAmount / $memberCount;
 
         $stmt = $db->prepare("
+            SELECT id
+            FROM group_members
+            WHERE group_id = ?
+            AND is_admin = 1
+            AND status = 'active'
+            LIMIT 1
+        ");
+        $stmt->execute([$groupId]);
+        $adminGroupMemberId = (int) $stmt->fetchColumn();
+
+        if ($adminGroupMemberId <= 0) {
+            api_error('Admin group member not found.');
+        }
+
+        $stmt = $db->prepare("
             UPDATE rounds
             SET 
                 winning_bid = NULL,
@@ -68,9 +82,10 @@ try {
         $stmt = $db->prepare("
             INSERT INTO payouts
             (round_id, winner_group_member_id, payout_amount, payout_type, created_at, updated_at)
-            VALUES (?, NULL, ?, 'ADMIN_FIRST_ROUND', NOW(), NOW())
+            VALUES (?, ?, ?, 'ADMIN_FIRST_ROUND', NOW(), NOW())
         ");
-        $stmt->execute([$roundId, $fundAmount]);
+        $stmt->execute([$roundId, $adminGroupMemberId, $fundAmount]);
+
     } else {
         $stmt = $db->prepare("
             SELECT gm.id AS group_member_id
@@ -78,12 +93,14 @@ try {
             WHERE gm.group_id = ?
             AND gm.status = 'active'
             AND gm.id NOT IN (
-                SELECT winner_group_member_id
-                FROM payouts
-                WHERE winner_group_member_id IS NOT NULL
+                SELECT p.winner_group_member_id
+                FROM payouts p
+                INNER JOIN rounds r2 ON r2.id = p.round_id
+                WHERE r2.group_id = ?
+                AND p.winner_group_member_id IS NOT NULL
             )
         ");
-        $stmt->execute([$groupId]);
+        $stmt->execute([$groupId, $groupId]);
         $eligibleMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         if (count($eligibleMembers) === 1) {

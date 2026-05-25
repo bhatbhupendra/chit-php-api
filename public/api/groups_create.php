@@ -3,9 +3,10 @@
 require_once __DIR__ . '/_bootstrap.php';
 
 try {
-    require_api_admin();
 
     $input = api_input();
+    $admin = require_api_admin();
+    $adminId = is_array($admin) ? (int) $admin['id'] : (int) $admin;
 
     $groupName = trim($input['group_name'] ?? '');
     $currency = trim($input['currency'] ?? 'NPR');
@@ -35,8 +36,20 @@ try {
 
     $stmt = $db->prepare("
         INSERT INTO chit_groups 
-        (group_name, currency, member_count, duration_months, monthly_amount, bid_step_percent, start_date, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', NOW(), NOW())
+        (
+            group_name, 
+            currency, 
+            member_count, 
+            duration_months, 
+            monthly_amount, 
+            bid_step_percent, 
+            start_date, 
+            status, 
+            created_by,
+            created_at, 
+            updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, NOW(), NOW())
     ");
 
     $stmt->execute([
@@ -47,6 +60,7 @@ try {
         $monthlyAmount,
         $bidStepPercent,
         $startDate,
+        $adminId,
     ]);
 
     api_success([

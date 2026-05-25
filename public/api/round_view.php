@@ -27,6 +27,31 @@ try {
         api_error('Round not found.', [], 404);
     }
 
+    $billStmt = $db->prepare("
+        SELECT * FROM round_bills 
+        WHERE round_id = ? 
+        LIMIT 1
+    ");
+    $billStmt->execute([$roundId]);
+    $bill = $billStmt->fetch(PDO::FETCH_ASSOC);
+
+    $billCharges = [];
+
+    if ($bill) {
+        $chargeStmt = $db->prepare("
+            SELECT * FROM round_bill_charges
+            WHERE bill_id = ?
+            ORDER BY id ASC
+        ");
+        $chargeStmt->execute([$bill['id']]);
+        $billCharges = $chargeStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $bill['charges'] = $billCharges;
+    }
+
+    $round['bill'] = $bill ?: null;
+    ///rounds ends
+
     $stmt = $db->prepare("
         SELECT 
             c.*,
@@ -75,6 +100,9 @@ try {
     $eligibleMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     api_success([
+        'debug_round_id' => $roundId,
+        'debug_bill_found' => $bill ? 'yes' : 'no',
+        'debug_bill' => $bill,
         'round' => $round,
         'contributions' => $contributions,
         'bids' => $bids,

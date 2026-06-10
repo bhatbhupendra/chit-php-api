@@ -14,7 +14,7 @@ try {
         api_error('Contribution ID is required.');
     }
 
-    if (!in_array($status, ['paid', 'due'], true)) {
+    if (!in_array($status, ['paid', 'due', 'fine'], true)) {
         api_error('Invalid payment status.');
     }
 
@@ -23,13 +23,25 @@ try {
     if ($status === 'paid') {
         $stmt = $db->prepare("
             UPDATE contributions
-            SET status = 'paid', paid_at = NOW(), updated_at = NOW()
+            SET status = 'paid',
+                paid_at = NOW(),
+                updated_at = NOW()
+            WHERE id = ?
+        ");
+    } elseif ($status === 'fine') {
+        $stmt = $db->prepare("
+            UPDATE contributions
+            SET status = 'fine',
+                paid_at = NULL,
+                updated_at = NOW()
             WHERE id = ?
         ");
     } else {
         $stmt = $db->prepare("
             UPDATE contributions
-            SET status = 'due', paid_at = NULL, updated_at = NOW()
+            SET status = 'due',
+                paid_at = NULL,
+                updated_at = NOW()
             WHERE id = ?
         ");
     }
